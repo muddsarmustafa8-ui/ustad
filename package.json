@@ -1,0 +1,25 @@
+{
+  "name": "mern-local-services-marketplace",
+  "version": "1.0.0",
+  "description": "Local Services Marketplace - MERN Stack",
+  "private": true,
+  "scripts": {
+    "install-all": "npm install && npm install --prefix client && npm install --prefix server",
+    "dev": "start cmd /k npm run dev --prefix server && start cmd /k npm run dev --prefix client",
+    "start:server": "npm run start --prefix server",
+    "start:client": "npm run dev --prefix client",
+    "seed": "npm run seed --prefix server",
+    "build": "npm run build --prefix client"
+  },
+  "keywords": [
+    "mern",
+    "marketplace",
+    "local-services"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.18.1",
+    "socket.io-client": "^4.8.3"
+  }
+}

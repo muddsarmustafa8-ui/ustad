@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: marketplace-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: marketplace
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - marketplace
+
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    container_name: marketplace-api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://admin:password@mongodb:27017/marketplace?authSource=admin
+      - PORT=5000
+    depends_on:
+      - mongodb
+    volumes:
+      - ../apps/api:/app
+      - /app/node_modules
+    networks:
+      - marketplace
+
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+    container_name: marketplace-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    networks:
+      - marketplace
+
+  admin:
+    build:
+      context: ../apps/admin
+      dockerfile: Dockerfile
+    container_name: marketplace-admin
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+    networks:
+      - marketplace
+
+volumes:
+  mongodb_data:
+
+networks:
+  marketplace:
+    driver: bridge
