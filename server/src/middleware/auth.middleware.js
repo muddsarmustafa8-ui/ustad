@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const userService = require('../services/supabaseUser.service');
 const { verifyAccessToken } = require('../services/token.service');
 
 const protect = async (req, res, next) => {
@@ -15,7 +15,7 @@ const protect = async (req, res, next) => {
 
   try {
     const decoded = verifyAccessToken(token);
-    const user = await User.findById(decoded.id);
+    const user = await userService.findById(decoded.id);
 
     if (!user) {
       return res.status(401).json({ success: false, message: 'User not found with this id' });

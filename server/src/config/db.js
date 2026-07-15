@@ -1,12 +1,10 @@
-const mongoose = require('mongoose');
-
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/marketplace');
-    console.log(`💚 MongoDB Connected: ${conn.connection.host}`);
+    console.log('ℹ️ Using Supabase for application data. MongoDB connection is no longer required for startup.');
+    return true;
   } catch (error) {
-    console.error(`❌ MongoDB connection error: ${error.message}`);
-    process.exit(1);
+    console.error(`❌ Supabase initialization error: ${error.message}`);
+    return false;
   }
 };
 

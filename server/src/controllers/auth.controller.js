@@ -1,10 +1,10 @@
-const User = require('../models/User');
 const crypto = require('crypto');
 const {
   generateAccessToken,
   generateRefreshToken,
   verifyRefreshToken,
 } = require('../services/token.service');
+const userService = require('../services/supabaseUser.service');
 const {
   sendWelcomeEmail,
   sendVerificationEmail,
@@ -19,23 +19,23 @@ const { sendSuccess, sendError } = require('../utils/apiResponse');
 const register = asyncHandler(async (req, res, next) => {
   const { fullName, email, phone, password, role } = req.body;
 
-  const userExists = await User.findOne({ email });
+  const userExists = await userService.findByEmail(email);
   if (userExists) {
     return sendError(res, 'User already exists with this email address', 400);
   }
 
-  // Create user
-  const user = await User.create({
+  const verifyToken = userService.createEmailVerificationToken();
+  const user = await userService.create({
     fullName,
     email,
     phone,
     password,
     role: role || 'customer',
+    isEmailVerified: false,
+    emailVerificationToken: verifyToken,
+    emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    refreshTokens: [],
   });
-
-  // Generate email verification token
-  const verifyToken = user.createEmailVerificationToken();
-  await user.save({ validateBeforeSave: false });
 
   // Send verification email
   try {
@@ -48,11 +48,9 @@ const register = asyncHandler(async (req, res, next) => {
   const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user);
 
-  // Save refresh token
   user.refreshTokens.push(refreshToken);
-  await user.save({ validateBeforeSave: false });
+  await userService.update(user);
 
-  // Exclude password from output
   user.password = undefined;
 
   return sendSuccess(res, { user, accessToken, refreshToken }, 'User registered successfully. Verification email sent.', 211);
@@ -68,8 +66,8 @@ const login = asyncHandler(async (req, res, next) => {
     return sendError(res, 'Please provide email and password', 400);
   }
 
-  const user = await User.findOne({ email }).select('+password');
-  if (!user || !(await user.comparePassword(password))) {
+  const user = await userService.findByEmail(email);
+  if (!user || !(await userService.comparePassword(password, user.password))) {
     return sendError(res, 'Invalid credentials', 401);
   }
 
@@ -81,9 +79,8 @@ const login = asyncHandler(async (req, res, next) => {
   const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user);
 
-  // Save refresh token
   user.refreshTokens.push(refreshToken);
-  await user.save({ validateBeforeSave: false });
+  await userService.update(user);
 
   user.password = undefined;
 
@@ -99,10 +96,10 @@ const logout = asyncHandler(async (req, res, next) => {
     return sendError(res, 'Refresh token is required', 400);
   }
 
-  const user = await User.findOne({ refreshTokens: refreshToken });
+  const user = await userService.findByRefreshToken(refreshToken);
   if (user) {
     user.refreshTokens = user.refreshTokens.filter(t => t !== refreshToken);
-    await user.save({ validateBeforeSave: false });
+    await userService.update(user);
   }
 
   return sendSuccess(res, null, 'Logged out successfully');
@@ -125,7 +122,7 @@ const refreshToken = asyncHandler(async (req, res, next) => {
     return sendError(res, 'Invalid or expired refresh token', 401);
   }
 
-  const user = await User.findById(decoded.id);
+  const user = await userService.findById(decoded.id);
   if (!user || !user.refreshTokens.includes(refreshToken)) {
     return sendError(res, 'Invalid or expired refresh token', 401);
   }
@@ -137,7 +134,7 @@ const refreshToken = asyncHandler(async (req, res, next) => {
   // Rotate refresh tokens
   user.refreshTokens = user.refreshTokens.filter(t => t !== refreshToken);
   user.refreshTokens.push(newRefreshToken);
-  await user.save({ validateBeforeSave: false });
+  await userService.update(user);
 
   return sendSuccess(res, { accessToken: newAccessToken, refreshToken: newRefreshToken }, 'Token refreshed successfully');
 });
@@ -149,22 +146,19 @@ const verifyEmail = asyncHandler(async (req, res, next) => {
   const token = req.params.token;
   const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
-  const user = await User.findOne({
-    emailVerificationToken: hashedToken,
-    emailVerificationExpires: { $gt: Date.now() },
-  });
+  const userToVerify = await userService.findByEmailVerificationToken(hashedToken);
 
-  if (!user) {
+  if (!userToVerify) {
     return sendError(res, 'Verification token is invalid or has expired', 400);
   }
 
-  user.isEmailVerified = true;
-  user.emailVerificationToken = undefined;
-  user.emailVerificationExpires = undefined;
-  await user.save({ validateBeforeSave: false });
+  userToVerify.isEmailVerified = true;
+  userToVerify.emailVerificationToken = undefined;
+  userToVerify.emailVerificationExpires = undefined;
+  await userService.update(userToVerify);
 
   try {
-    await sendWelcomeEmail(user);
+    await sendWelcomeEmail(userToVerify);
   } catch (error) {
     console.error(`❌ Welcome email delivery failed: ${error.message}`);
   }
@@ -178,13 +172,15 @@ const verifyEmail = asyncHandler(async (req, res, next) => {
 const forgotPassword = asyncHandler(async (req, res, next) => {
   const { email } = req.body;
 
-  const user = await User.findOne({ email });
+  const user = await userService.findByEmail(email);
   if (!user) {
     return sendError(res, 'There is no user registered with that email address', 404);
   }
 
-  const resetToken = user.createPasswordResetToken();
-  await user.save({ validateBeforeSave: false });
+  const resetToken = userService.createPasswordResetToken();
+  user.passwordResetToken = resetToken;
+  user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000);
+  await userService.update(user);
 
   try {
     await sendPasswordResetEmail(user, resetToken);
@@ -192,7 +188,7 @@ const forgotPassword = asyncHandler(async (req, res, next) => {
   } catch (error) {
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
-    await user.save({ validateBeforeSave: false });
+    await userService.update(user);
     return sendError(res, 'Email could not be sent. Try again later.', 500);
   }
 });
@@ -204,20 +200,17 @@ const resetPassword = asyncHandler(async (req, res, next) => {
   const token = req.params.token;
   const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
-  const user = await User.findOne({
-    passwordResetToken: hashedToken,
-    passwordResetExpires: { $gt: Date.now() },
-  });
+  const userToReset = await userService.findByPasswordResetToken(hashedToken);
 
-  if (!user) {
+  if (!userToReset) {
     return sendError(res, 'Reset token is invalid or has expired', 400);
   }
 
-  user.password = req.body.password;
-  user.passwordResetToken = undefined;
-  user.passwordResetExpires = undefined;
-  user.refreshTokens = []; // Revoke all sessions on password change
-  await user.save();
+  userToReset.password = req.body.password;
+  userToReset.passwordResetToken = undefined;
+  userToReset.passwordResetExpires = undefined;
+  userToReset.refreshTokens = [];
+  await userService.update(userToReset);
 
   return sendSuccess(res, null, 'Password reset successful. Please login with your new credentials.');
 });
@@ -226,7 +219,7 @@ const resetPassword = asyncHandler(async (req, res, next) => {
 // @route   GET /api/auth/me
 // @access  Private
 const getMe = asyncHandler(async (req, res, next) => {
-  const user = await User.findById(req.user.id);
+  const user = await userService.findById(req.user.id);
   return sendSuccess(res, user, 'Fetched current user successfully');
 });
 
@@ -240,22 +233,22 @@ const updatePassword = asyncHandler(async (req, res, next) => {
     return sendError(res, 'Please provide current password and new password', 400);
   }
 
-  const user = await User.findById(req.user.id).select('+password');
+  const user = await userService.findById(req.user.id);
 
-  if (!(await user.comparePassword(currentPassword))) {
+  if (!(await userService.comparePassword(currentPassword, user.password))) {
     return sendError(res, 'Incorrect current password', 401);
   }
 
   user.password = newPassword;
-  user.refreshTokens = []; // Revoke other sessions
-  await user.save();
+  user.refreshTokens = [];
+  await userService.update(user);
 
   // Generate new tokens
   const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user);
 
   user.refreshTokens.push(refreshToken);
-  await user.save({ validateBeforeSave: false });
+  await userService.update(user);
 
   return sendSuccess(res, { accessToken, refreshToken }, 'Password updated successfully');
 });
