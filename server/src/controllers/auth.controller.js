@@ -58,7 +58,7 @@ const register = asyncHandler(async (req, res, next) => {
 
     user.password = undefined;
 
-    return sendSuccess(res, { user, accessToken, refreshToken }, 'User registered successfully. Verification email sent.', 211);
+    return sendSuccess(res, { user, accessToken, refreshToken }, 'User registered successfully. Verification email sent.', 201);
   } catch (error) {
     console.error('❌ Registration error:', error);
     console.error('Error details:', error.message, error.details);
@@ -274,3 +274,4 @@ module.exports = {
   getMe,
   updatePassword,
 };
+

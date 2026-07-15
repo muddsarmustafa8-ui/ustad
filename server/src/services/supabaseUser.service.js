@@ -3,9 +3,39 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
 const TABLE_NAME = 'users';
+const mockUsers = new Map();
+
+const cloneUser = (user) => ({
+  ...user,
+  refreshTokens: [...(user.refreshTokens || [])],
+});
+
+const findMockUser = (predicate) => {
+  for (const user of mockUsers.values()) {
+    if (predicate(user)) return cloneUser(user);
+  }
+  return null;
+};
+
+const saveMockUser = (user) => {
+  const now = new Date().toISOString();
+  const id = user.id || user._id || crypto.randomUUID();
+  const saved = {
+    ...user,
+    id,
+    _id: id,
+    createdAt: user.createdAt || now,
+    updatedAt: now,
+    refreshTokens: user.refreshTokens || [],
+  };
+
+  mockUsers.set(id, cloneUser(saved));
+  return cloneUser(saved);
+};
 
 const toUserRecord = (row) => ({
   id: row.id,
+  _id: row.id,
   fullName: row.full_name,
   email: row.email,
   phone: row.phone,
@@ -47,7 +77,7 @@ const ensureSupabase = () => {
 };
 
 const findByEmail = async (email) => {
-  if (!supabase) return null;
+  if (!supabase) return findMockUser((user) => user.email === email);
   ensureSupabase();
   const { data, error } = await supabase.from(TABLE_NAME).select('*').eq('email', email).maybeSingle();
   if (error) throw error;
@@ -55,7 +85,7 @@ const findByEmail = async (email) => {
 };
 
 const findById = async (id) => {
-  if (!supabase) return null;
+  if (!supabase) return mockUsers.has(id) ? cloneUser(mockUsers.get(id)) : null;
   ensureSupabase();
   const { data, error } = await supabase.from(TABLE_NAME).select('*').eq('id', id).maybeSingle();
   if (error) throw error;
@@ -63,7 +93,7 @@ const findById = async (id) => {
 };
 
 const findByRefreshToken = async (refreshToken) => {
-  if (!supabase) return null;
+  if (!supabase) return findMockUser((user) => (user.refreshTokens || []).includes(refreshToken));
   ensureSupabase();
   const { data, error } = await supabase.from(TABLE_NAME).select('*').filter('refresh_tokens', 'cs', JSON.stringify([refreshToken])).maybeSingle();
   if (error) throw error;
@@ -71,7 +101,7 @@ const findByRefreshToken = async (refreshToken) => {
 };
 
 const findByEmailVerificationToken = async (token) => {
-  if (!supabase) return null;
+  if (!supabase) return findMockUser((user) => user.emailVerificationToken === token);
   ensureSupabase();
   const { data, error } = await supabase.from(TABLE_NAME).select('*').eq('email_verification_token', token).maybeSingle();
   if (error) throw error;
@@ -79,7 +109,7 @@ const findByEmailVerificationToken = async (token) => {
 };
 
 const findByPasswordResetToken = async (token) => {
-  if (!supabase) return null;
+  if (!supabase) return findMockUser((user) => user.passwordResetToken === token);
   ensureSupabase();
   const { data, error } = await supabase.from(TABLE_NAME).select('*').eq('password_reset_token', token).maybeSingle();
   if (error) throw error;
@@ -87,36 +117,36 @@ const findByPasswordResetToken = async (token) => {
 };
 
 const create = async (userData) => {
-  if (!supabase) return null;
-  ensureSupabase();
-  try {
+  if (!supabase) {
     const passwordHash = userData.password ? await bcrypt.hash(userData.password, 10) : null;
-    const payload = {
-      ...fromUserRecord({
-        ...userData,
-        password: passwordHash,
-        role: userData.role || 'customer',
-        isActive: userData.isActive ?? true,
-        isEmailVerified: userData.isEmailVerified ?? false,
-        refreshTokens: userData.refreshTokens || [],
-      }),
-    };
-    console.log('📤 Payload being inserted into Supabase:', JSON.stringify(payload, null, 2));
-    const { data, error } = await supabase.from(TABLE_NAME).insert(payload).select('*').single();
-    if (error) {
-      console.error('❌ Supabase error:', error);
-      throw error;
-    }
-    console.log('✅ User created in Supabase:', data);
-    return toUserRecord(data);
-  } catch (err) {
-    console.error('❌ Error in create:', err.message);
-    throw err;
+    return saveMockUser({
+      ...userData,
+      password: passwordHash,
+      role: userData.role || 'customer',
+      isActive: userData.isActive ?? true,
+      isEmailVerified: userData.isEmailVerified ?? false,
+      refreshTokens: userData.refreshTokens || [],
+    });
   }
+
+  ensureSupabase();
+  const passwordHash = userData.password ? await bcrypt.hash(userData.password, 10) : null;
+  const payload = fromUserRecord({
+    ...userData,
+    password: passwordHash,
+    role: userData.role || 'customer',
+    isActive: userData.isActive ?? true,
+    isEmailVerified: userData.isEmailVerified ?? false,
+    refreshTokens: userData.refreshTokens || [],
+  });
+
+  const { data, error } = await supabase.from(TABLE_NAME).insert(payload).select('*').single();
+  if (error) throw error;
+  return toUserRecord(data);
 };
 
 const update = async (user) => {
-  if (!supabase) return null;
+  if (!supabase) return saveMockUser(user);
   ensureSupabase();
   const payload = fromUserRecord(user);
   const { data, error } = await supabase.from(TABLE_NAME).update(payload).eq('id', user.id).select('*').single();
