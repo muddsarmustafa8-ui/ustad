@@ -89,20 +89,30 @@ const findByPasswordResetToken = async (token) => {
 const create = async (userData) => {
   if (!supabase) return null;
   ensureSupabase();
-  const passwordHash = userData.password ? await bcrypt.hash(userData.password, 10) : null;
-  const payload = {
-    ...fromUserRecord({
-      ...userData,
-      password: passwordHash,
-      role: userData.role || 'customer',
-      isActive: userData.isActive ?? true,
-      isEmailVerified: userData.isEmailVerified ?? false,
-      refreshTokens: userData.refreshTokens || [],
-    }),
-  };
-  const { data, error } = await supabase.from(TABLE_NAME).insert(payload).select('*').single();
-  if (error) throw error;
-  return toUserRecord(data);
+  try {
+    const passwordHash = userData.password ? await bcrypt.hash(userData.password, 10) : null;
+    const payload = {
+      ...fromUserRecord({
+        ...userData,
+        password: passwordHash,
+        role: userData.role || 'customer',
+        isActive: userData.isActive ?? true,
+        isEmailVerified: userData.isEmailVerified ?? false,
+        refreshTokens: userData.refreshTokens || [],
+      }),
+    };
+    console.log('📤 Payload being inserted into Supabase:', JSON.stringify(payload, null, 2));
+    const { data, error } = await supabase.from(TABLE_NAME).insert(payload).select('*').single();
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      throw error;
+    }
+    console.log('✅ User created in Supabase:', data);
+    return toUserRecord(data);
+  } catch (err) {
+    console.error('❌ Error in create:', err.message);
+    throw err;
+  }
 };
 
 const update = async (user) => {

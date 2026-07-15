@@ -1,8 +1,10 @@
 const jwt = require('jsonwebtoken');
 
+const getUserId = (user) => user._id || user.id;
+
 const generateAccessToken = (user) => {
   return jwt.sign(
-    { id: user._id, role: user.role, email: user.email },
+    { id: getUserId(user), role: user.role, email: user.email },
     process.env.JWT_SECRET || 'development-jwt-secret-key-32-characters-minimum',
     { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
   );
@@ -10,7 +12,7 @@ const generateAccessToken = (user) => {
 
 const generateRefreshToken = (user) => {
   return jwt.sign(
-    { id: user._id },
+    { id: getUserId(user) },
     process.env.JWT_REFRESH_SECRET || 'development-jwt-refresh-secret-key-32-chars',
     { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
   );
@@ -30,3 +32,4 @@ module.exports = {
   verifyAccessToken,
   verifyRefreshToken,
 };
+

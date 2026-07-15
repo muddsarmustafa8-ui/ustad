@@ -30,8 +30,12 @@ const initSocket = (server) => {
   io.on('connection', (socket) => {
     console.log(`🔌 User connected to socket: ${socket.userId} (Socket: ${socket.id})`);
 
-    // Join a private room named after the userId to receive personal notifications & direct messages
-    socket.join(socket.userId.toString());
+    // Only join room if userId exists (user is authenticated)
+    if (socket.userId) {
+      socket.join(socket.userId.toString());
+    } else {
+      console.warn(`⚠️ Socket connected without userId: ${socket.id}`);
+    }
 
     socket.on('disconnect', () => {
       console.log(`🔌 User disconnected from socket: ${socket.userId}`);

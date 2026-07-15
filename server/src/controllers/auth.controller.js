@@ -17,43 +17,53 @@ const { sendSuccess, sendError } = require('../utils/apiResponse');
 // @route   POST /api/auth/register
 // @access  Public
 const register = asyncHandler(async (req, res, next) => {
-  const { fullName, email, phone, password, role } = req.body;
-
-  const userExists = await userService.findByEmail(email);
-  if (userExists) {
-    return sendError(res, 'User already exists with this email address', 400);
-  }
-
-  const verifyToken = userService.createEmailVerificationToken();
-  const user = await userService.create({
-    fullName,
-    email,
-    phone,
-    password,
-    role: role || 'customer',
-    isEmailVerified: false,
-    emailVerificationToken: verifyToken,
-    emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    refreshTokens: [],
-  });
-
-  // Send verification email
   try {
-    await sendVerificationEmail(user, verifyToken);
+    const { fullName, email, phone, password, role } = req.body;
+
+    const userExists = await userService.findByEmail(email);
+    if (userExists) {
+      return sendError(res, 'User already exists with this email address', 400);
+    }
+
+    const verifyToken = userService.createEmailVerificationToken();
+    console.log('📝 Creating user with payload:', { fullName, email, phone, role });
+    
+    const user = await userService.create({
+      fullName,
+      email,
+      phone,
+      password,
+      role: role || 'customer',
+      isEmailVerified: false,
+      emailVerificationToken: verifyToken,
+      emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      refreshTokens: [],
+    });
+
+    console.log('✅ User created successfully:', user.id);
+
+    // Send verification email
+    try {
+      await sendVerificationEmail(user, verifyToken);
+    } catch (error) {
+      console.error(`❌ Registration email delivery failed: ${error.message}`);
+    }
+
+    // Generate tokens
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+
+    user.refreshTokens.push(refreshToken);
+    await userService.update(user);
+
+    user.password = undefined;
+
+    return sendSuccess(res, { user, accessToken, refreshToken }, 'User registered successfully. Verification email sent.', 211);
   } catch (error) {
-    console.error(`❌ Registration email delivery failed: ${error.message}`);
+    console.error('❌ Registration error:', error);
+    console.error('Error details:', error.message, error.details);
+    throw error;
   }
-
-  // Generate tokens
-  const accessToken = generateAccessToken(user);
-  const refreshToken = generateRefreshToken(user);
-
-  user.refreshTokens.push(refreshToken);
-  await userService.update(user);
-
-  user.password = undefined;
-
-  return sendSuccess(res, { user, accessToken, refreshToken }, 'User registered successfully. Verification email sent.', 211);
 });
 
 // @desc    Login user
