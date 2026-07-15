@@ -1,35 +1,4 @@
-const mongoose = require('mongoose');
+const { createSupabaseModel } = require('./supabaseModel');
 
-const notificationSchema = new mongoose.Schema(
-  {
-    recipient: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
-    title: {
-      type: String,
-      required: true,
-    },
-    message: {
-      type: String,
-      required: true,
-    },
-    type: {
-      type: String,
-      enum: ['booking', 'chat', 'system', 'review', 'verification'],
-      default: 'system',
-    },
-    relatedId: mongoose.Schema.Types.ObjectId, // bookingId, messageId, etc.
-    isRead: {
-      type: Boolean,
-      default: false,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
-
-const Notification = mongoose.model('Notification', notificationSchema);
+const Notification = createSupabaseModel('notifications');
 module.exports = Notification;

@@ -1,34 +1,4 @@
-const mongoose = require('mongoose');
+const { createSupabaseModel } = require('./supabaseModel');
 
-const messageSchema = new mongoose.Schema(
-  {
-    sender: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
-    recipient: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
-    business: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Business',
-    },
-    message: {
-      type: String,
-      required: true,
-    },
-    isRead: {
-      type: Boolean,
-      default: false,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
-
-const Message = mongoose.model('Message', messageSchema);
+const Message = createSupabaseModel('messages');
 module.exports = Message;
