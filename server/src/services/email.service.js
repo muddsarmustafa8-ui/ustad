@@ -1,13 +1,32 @@
 const nodemailer = require('nodemailer');
 
 const createTransporter = () => {
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpPort = parseInt(process.env.SMTP_PORT, 10) || 2525;
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SMTP configuration is required in production');
+    }
+
+    return nodemailer.createTransport({
+      jsonTransport: true,
+    });
+  }
+
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.mailtrap.io',
-    port: parseInt(process.env.SMTP_PORT, 10) || 2525,
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
     auth: {
-      user: process.env.SMTP_USER || 'mock-user',
-      pass: process.env.SMTP_PASS || 'mock-pass',
+      user: smtpUser,
+      pass: smtpPass,
     },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
 };
 

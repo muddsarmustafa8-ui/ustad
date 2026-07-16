@@ -42,12 +42,10 @@ const register = asyncHandler(async (req, res, next) => {
 
     console.log('✅ User created successfully:', user.id);
 
-    // Send verification email
-    try {
-      await sendVerificationEmail(user, verifyToken);
-    } catch (error) {
-      console.error(`❌ Registration email delivery failed: ${error.message}`);
-    }
+    // Send verification email without blocking response
+    sendVerificationEmail(user, verifyToken)
+      .then(() => console.log(`✅ Verification email queued for ${user.email}`))
+      .catch((error) => console.error(`❌ Registration email delivery failed: ${error.message}`));
 
     // Generate tokens
     const accessToken = generateAccessToken(user);
