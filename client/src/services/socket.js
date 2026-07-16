@@ -5,7 +5,7 @@ let socket = null;
 export const initSocket = () => {
   if (socket) return socket;
 
-  const serverUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const serverUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '').replace(/\/$/, '');
   const accessToken = localStorage.getItem('accessToken');
 
   socket = io(serverUrl, {
@@ -52,3 +52,4 @@ export default {
   getSocket,
   disconnectSocket,
 };
+
